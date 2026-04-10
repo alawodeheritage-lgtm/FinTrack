@@ -29,3 +29,36 @@
     min-height: 100vh;
   }
 }
+
+/* Animation for Positive Flow (Left to Right) */
+@keyframes graphUp {
+  from {
+    stroke-dashoffset: 200;
+  }
+
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Animation for Negative Flow (Right to Left) */
+@keyframes graphDown {
+  from {
+    stroke-dashoffset: 0;
+  }
+
+  to {
+    stroke-dashoffset: 200;
+  }
+}
+
+.animate-graph-up {
+  animation: graphUp 3s linear infinite;
+}
+
+.animate-graph-down {
+  animation: graphDown 3s linear infinite;
+}
+
+/* Logic for the glowing circle point to follow the path can be complex in CSS, 
+   so the circle in the code above is a simplified indicator. */

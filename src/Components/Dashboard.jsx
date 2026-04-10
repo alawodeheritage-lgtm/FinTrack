@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { account, databases, ID, Query } from '../lib/appwrite';
+import { account, databases, ID, Query, storage } from '../lib/appwrite';
 import Swal from 'sweetalert2';
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 import {
   LayoutDashboard, ReceiptText, Wallet as WalletIcon,
-  BarChart3, Settings, Search, Bell, Plus, Trash2,
+  BarChart3, Zap, /* Add this one*/ Settings, Search, FileText, Bell, Plus, Trash2,
   Home, Utensils, TrendingUp, Bus, ChevronDown, Send, Menu, X,
-  PieChart as PieIcon, User, LogOut, Loader2, ArrowUpDown, Filter, Sparkles
+  PieChart as PieIcon, User, LogOut, Loader2, ArrowUpDown, ShieldCheck, // <--- Add this
+  Database, CloudDownload, Sparkles
 } from 'lucide-react';
 
 const Dashboard = ({ user, setUser }) => {
@@ -20,6 +23,15 @@ const Dashboard = ({ user, setUser }) => {
   const COLLECTION_ID = import.meta.env.VITE_APPWRITE_COLLECTION_ID;
 
   const currency = user?.prefs?.currency || "$";
+
+  const categoryConfig = {
+    Income: { bg: 'bg-emerald-500', color: '#10b981', label: 'Earnings' },
+    Essential: { bg: 'bg-blue-500', color: '#0ea5e9', label: 'Bills/Needs' },
+    Luxury: { bg: 'bg-orange-400', color: '#fb923c', label: 'Wants/Fun' },
+    Savings: { bg: 'bg-purple-600', color: '#7c3aed', label: 'Future/Goal' },
+    Withdrawal: { bg: 'bg-rose-500', color: '#f43f5e', label: 'Dip into Savings' }
+  };
+
 
   // --- STATE ---
   const [expenses, setExpenses] = useState([]);
@@ -78,6 +90,8 @@ const Dashboard = ({ user, setUser }) => {
     }
   };
 
+  // 1. DELETE FUNCTION
+  // Line 171 (Approx)
   const handleDelete = async (id) => {
     const result = await Swal.fire({
       title: 'Delete?',
@@ -93,14 +107,200 @@ const Dashboard = ({ user, setUser }) => {
 
     if (result.isConfirmed) {
       try {
+        // Line 181 - The "await" is now safely inside an "async" function
         await databases.deleteDocument(DATABASE_ID, COLLECTION_ID, id);
         fetchData();
-        Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Deleted successfully', showConfirmButton: false, timer: 2000 });
+        Swal.fire({
+          toast: true,
+          position: 'top-end',
+          icon: 'success',
+          title: 'Deleted successfully',
+          showConfirmButton: false,
+          timer: 2000,
+          background: isDarkMode ? '#161f2e' : '#fff',
+          color: isDarkMode ? '#fff' : '#000'
+        });
       } catch (error) {
-        Swal.fire({ icon: 'error', title: 'Delete failed', text: error.message });
+        Swal.fire({
+          icon: 'error',
+          title: 'Delete failed',
+          text: error.message,
+          background: isDarkMode ? '#161f2e' : '#fff',
+          color: isDarkMode ? '#fff' : '#000'
+        });
       }
     }
   };
+
+  const handleUploadReceipt = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    try {
+      Swal.fire({
+        title: 'Uploading...',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading(),
+        background: isDarkMode ? '#161f2e' : '#fff',
+        color: isDarkMode ? '#fff' : '#000'
+      });
+
+      // Using the Appwrite storage service
+      await storage.createFile(
+        import.meta.env.VITE_APPWRITE_STORAGE_ID,
+        ID.unique(),
+        file
+      );
+
+      Swal.fire({
+        icon: 'success',
+        title: 'Receipt Vaulted',
+        text: 'Your document is securely stored.',
+        background: isDarkMode ? '#161f2e' : '#fff',
+        color: isDarkMode ? '#fff' : '#000'
+      });
+    } catch (error) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Upload Failed',
+        text: error.message,
+        background: isDarkMode ? '#161f2e' : '#fff',
+        color: isDarkMode ? '#fff' : '#000'
+      });
+    }
+  };
+
+  const handleExportFinancialAudit = () => {
+    const doc = new jsPDF();
+    const actualExpenses = typeof expenses !== 'undefined' ? expenses : [];
+
+    // --- 1. THE NAVY HEADER (UI Kept Intact) ---
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, 210, 45, 'F');
+    doc.setFontSize(24).setTextColor(255, 255, 255).setFont(undefined, 'bold');
+    doc.text("FINTRACK FINANCIAL AUDIT", 14, 25);
+    doc.setFontSize(10).setFont(undefined, 'normal').setTextColor(200, 200, 200);
+    doc.text(`Official Ledger Analysis: ${user.name.toUpperCase()}`, 14, 35);
+
+    // --- 2. THE SUMMARY BOXES (UI Kept Intact) ---
+    const surplus = totalIncome - totalSpent;
+
+    doc.setFillColor(240, 249, 255).roundedRect(14, 55, 60, 25, 3, 3, 'F');
+    doc.setFontSize(12).setTextColor(16, 185, 129).setFont(undefined, 'bold').text(`${currency}${totalIncome.toLocaleString()}`, 18, 72);
+
+    doc.setFillColor(254, 242, 242).roundedRect(78, 55, 60, 25, 3, 3, 'F');
+    doc.setTextColor(244, 63, 94).text(`${currency}${totalSpent.toLocaleString()}`, 82, 72);
+
+    doc.setFillColor(240, 253, 244).roundedRect(142, 55, 54, 25, 3, 3, 'F');
+    doc.setTextColor(30, 41, 59).text(`${currency}${surplus.toLocaleString()}`, 146, 72);
+
+    // --- 3. THE BAR CHART (Using doc.rect for stability) ---
+    const totals = {};
+    actualExpenses.forEach(item => {
+      totals[item.category] = (totals[item.category] || 0) + item.amount;
+    });
+
+    const categories = Object.keys(totals);
+    const values = Object.values(totals);
+    const maxValue = Math.max(...values, 1);
+
+    doc.setFontSize(14).setTextColor(30, 41, 59).text("Spending Analysis by Category", 14, 95);
+
+    const chartBaseY = 160;
+    const chartHeight = 50;
+    const barWidth = 25;
+    const gap = 15;
+
+    categories.forEach((cat, index) => {
+      const barVal = (totals[cat] / maxValue) * chartHeight;
+      const xPos = 30 + (index * (barWidth + gap));
+
+      const hex = categoryConfig[cat]?.color || '#64748b';
+      const r = parseInt(hex.slice(1, 3), 16);
+      const g = parseInt(hex.slice(3, 5), 16);
+      const b = parseInt(hex.slice(5, 7), 16);
+
+      doc.setFillColor(r, g, b);
+      doc.rect(xPos, chartBaseY - barVal, barWidth, barVal, 'F');
+
+      doc.setFontSize(8).setTextColor(100).text(cat.toUpperCase(), xPos + (barWidth / 2), chartBaseY + 5, { align: 'center' });
+      doc.setFontSize(8).setTextColor(30).text(`${currency}${totals[cat].toLocaleString()}`, xPos + (barWidth / 2), chartBaseY - barVal - 3, { align: 'center' });
+    });
+
+    // --- 4. DATA TABLE (Clean & Professional) ---
+    autoTable(doc, {
+      startY: 180,
+      head: [['Category', 'Total Spent', 'Weight (%)']],
+      body: Object.entries(totals).map(([cat, val]) => [
+        cat.toUpperCase(),
+        `${currency}${val.toLocaleString()}`,
+        `${((val / (totalIncome || 1)) * 100).toFixed(1)}%`
+      ]),
+      headStyles: { fillColor: [15, 23, 42] },
+      didParseCell: (data) => {
+        if (data.section === 'body' && data.column.index === 0) {
+          const catName = Object.keys(totals)[data.row.index];
+          const hex = categoryConfig[catName]?.color || '#64748b';
+          const r = parseInt(hex.slice(1, 3), 16);
+          const g = parseInt(hex.slice(3, 5), 16);
+          const b = parseInt(hex.slice(5, 7), 16);
+          data.cell.styles.textColor = [r, g, b];
+          data.cell.styles.fontStyle = 'bold';
+        }
+      }
+    });
+
+    doc.save(`FinTrack_Audit_${user.name}.pdf`);
+  };
+
+  const handleExportCSV = () => {
+    // 1. Updated Headers: No Category
+    let rows = [["DATE", "DESCRIPTION", "TYPE", "AMOUNT"]];
+
+    // 2. Process Incomes
+    incomeItems.forEach(i => {
+      rows.push([
+        new Date(i.$createdAt).toLocaleDateString(),
+        i.title,
+        "INCOME",
+        i.amount
+      ]);
+    });
+
+    // 3. Process Expenses (using 'expenses' variable)
+    const actualExpenses = typeof expenses !== 'undefined' ? expenses : [];
+
+    actualExpenses.forEach(e => {
+      rows.push([
+        new Date(e.$createdAt).toLocaleDateString(),
+        e.title,
+        "EXPENSE",
+        e.amount
+      ]);
+    });
+
+    // 4. Create and Download the File
+    const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `FinTrack_Backup_${user.name}_${new Date().getTime()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link); // Clean up
+  };
+  // if (result.isConfirmed) {
+  //   try {
+  //     await databases.deleteDocument(DATABASE_ID, COLLECTION_ID, id);
+  //     fetchData();
+  //     Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Deleted successfully', showConfirmButton: false, timer: 2000 });
+  //   } catch (error) {
+  //     Swal.fire({ icon: 'error', title: 'Delete failed', text: error.message });
+  //   }
+  // }
+
+  const [is2FAEnabled, setIs2FAEnabled] = useState(false);
+  const [isAlertsEnabled, setIsAlertsEnabled] = useState(true);
 
   const handleLogout = async () => {
     await account.deleteSession('current');
@@ -115,38 +315,79 @@ const Dashboard = ({ user, setUser }) => {
     incomeItems.reduce((acc, curr) => acc + curr.amount, 0),
     [incomeItems]);
 
-  const totals = useMemo(() => ({
-    Essential: expenses.filter(e => e.category === 'Essential').reduce((acc, curr) => acc + curr.amount, 0),
-    Luxury: expenses.filter(e => e.category === 'Luxury').reduce((acc, curr) => acc + curr.amount, 0),
-    Savings: expenses.filter(e => e.category === 'Savings').reduce((acc, curr) => acc + curr.amount, 0),
-  }), [expenses]);
+  const totals = useMemo(() => {
+    // Filter all entries by category
+    const essential = expenses.filter(e => e.category === 'Essential').reduce((acc, curr) => acc + curr.amount, 0);
+    const luxury = expenses.filter(e => e.category === 'Luxury').reduce((acc, curr) => acc + curr.amount, 0);
+
+    // LOGIC: Savings = (All Money put IN) minus (All Money taken OUT)
+    const savingsDeposits = expenses.filter(e => e.category === 'Savings').reduce((acc, curr) => acc + curr.amount, 0);
+    const withdrawals = expenses.filter(e => e.category === 'Withdrawal').reduce((acc, curr) => acc + curr.amount, 0);
+
+    return {
+      Essential: essential,
+      Luxury: luxury,
+      Savings: savingsDeposits - withdrawals // This is your "Net Savings"
+    };
+  }, [expenses]);
+
+  const totalForPie = totals.Essential + totals.Luxury + Math.max(0, totals.Savings);
+
+  // Projection Math: If you keep saving this much every month...
+  const monthlySavings = totals.Savings > 0 ? totals.Savings : 0;
+  const yearlyProjection = monthlySavings * 12;
+  const fiveYearProjection = monthlySavings * 60; // 5 years
+
+
+  const allocationData = {
+    essential: totalForPie > 0 ? (totals.Essential / totalForPie) * 100 : 33,
+    luxury: totalForPie > 0 ? (totals.Luxury / totalForPie) * 100 : 33,
+    savings: totalForPie > 0 ? (Math.max(0, totals.Savings) / totalForPie) * 100 : 34,
+  };
+  const safetyNet = useMemo(() => {
+    if (totals.Essential === 0) return 0;
+    // Math: Total Saved / Monthly Needs
+    const months = totals.Savings / totals.Essential;
+    return months.toFixed(1); // Returns 1.5, 2.0, etc.
+  }, [totals.Savings, totals.Essential]);
 
   const totalSpent = useMemo(() => totals.Essential + totals.Luxury, [totals]);
-  const remainingBalance = totalIncome - totalSpent - totals.Savings;
+  const remainingBalance = useMemo(() => {
+    const totalWithdrawals = expenses.filter(e => e.category === 'Withdrawal').reduce((acc, curr) => acc + curr.amount, 0);
+    const totalSavingsDeposits = expenses.filter(e => e.category === 'Savings').reduce((acc, curr) => acc + curr.amount, 0);
 
-  const efficiency = useMemo(() => {
-    return totalIncome > 0 ? Math.min(Math.round((totalSpent / totalIncome) * 100), 100) : 0;
-  }, [totalIncome, totalSpent]);
+    // Formula: (Earned Income + Money taken back from Savings) - (All Spending + Money sent to Savings)
+    return (totalIncome + totalWithdrawals) - (totals.Essential + totals.Luxury + totalSavingsDeposits);
+  }, [totalIncome, totals, expenses]);
 
-  // --- PRO INSIGHT LOGIC ---
+
+  const efficiency = totalIncome > 0
+    ? Math.round((totals.Savings / totalIncome) * 100)
+    : 0;
+
+  // --- PRO INSIGHT LOGIC (Updated for 20%+) ---
   const proInsight = useMemo(() => {
-    // 1. If no income has been added yet
     if (totalIncome === 0) return "Add your income to start analysis.";
 
-    // 2. Logic checks
+    const savingsPercent = Math.round((totals.Savings / totalIncome) * 100);
     const luxuryOverhead = totals.Luxury > totals.Essential;
     const highSpending = efficiency > 80;
-    const goodSavings = totals.Savings >= (totalIncome * 0.2);
+    const goodSavings = savingsPercent >= 20;
 
-    // 3. Return priority message
     if (highSpending) return "Warning: Spending is very high compared to income.";
     if (luxuryOverhead) return "Insight: Your Luxury spending exceeds your Essentials.";
+
+    // NEW LOGIC: Check if they are ABOVE the 20% rule
+    if (savingsPercent > 20) {
+      const extra = savingsPercent - 20;
+      return `Incredible! You are ${extra}% above the 20% savings rule.`;
+    }
+
     if (goodSavings) return "Excellent! You are hitting the 20% savings rule.";
 
     return "Your financial health is currently stable.";
   }, [totalIncome, totals.Luxury, totals.Essential, totals.Savings, efficiency]);
-  // Note: We put the specific properties (totals.Luxury, etc.) in the dependency array
-  // to make sure React definitely triggers the update.
+
 
   const filteredTransactions = useMemo(() => {
     let result = expenses.filter(item =>
@@ -217,6 +458,7 @@ const Dashboard = ({ user, setUser }) => {
         <section className="p-6 lg:p-8 space-y-8 max-w-6xl mx-auto w-full">
           {activeTab === 'Dashboard' && (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2">
+              {/* INCOME & SAVINGS TOP CARD */}
               <div className="bg-white dark:bg-[#161f2e] border border-slate-200 dark:border-white/5 rounded-[2.5rem] p-8 shadow-sm">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
                   <div className="space-y-2">
@@ -224,8 +466,6 @@ const Dashboard = ({ user, setUser }) => {
                     <div className="w-full bg-slate-50 dark:bg-[#0b121f] border border-slate-200 dark:border-white/5 rounded-2xl py-4 px-6 text-2xl font-bold text-slate-900 dark:text-white">
                       {currency}{totalIncome.toLocaleString()}
                     </div>
-
-                    {/* Ensure this line exists and isn't being overwritten */}
                     <div className="flex items-center gap-1.5 mt-2 px-1">
                       <Sparkles size={12} className="text-blue-500" />
                       <span className="text-[10px] text-blue-500 font-bold uppercase tracking-tight">
@@ -246,54 +486,199 @@ const Dashboard = ({ user, setUser }) => {
                 </div>
               </div>
 
-              <div className="bg-white dark:bg-[#161f2e] border border-slate-200 dark:border-white/5 rounded-[2rem] p-8 shadow-sm">
-                <h3 className="text-md font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2"><Plus className="w-5 h-5 text-blue-500" /> Quick Entry</h3>
-                <form onSubmit={handleAddEntry} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <input placeholder="Item Name" value={name} onChange={(e) => setName(e.target.value)} className="bg-slate-50 dark:bg-[#0b121f] border border-slate-200 dark:border-white/5 rounded-xl p-3 text-sm text-slate-900 dark:text-white outline-none focus:border-blue-500" />
-                  <input type="number" placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} className="bg-slate-50 dark:bg-[#0b121f] border border-slate-200 dark:border-white/5 rounded-xl p-3 text-sm text-slate-900 dark:text-white outline-none focus:border-blue-500" />
-                  <select value={category} onChange={(e) => setCategory(e.target.value)} className="bg-slate-50 dark:bg-[#0b121f] border border-slate-200 dark:border-white/5 rounded-xl p-3 text-sm text-slate-900 dark:text-white outline-none">
-                    <option value="Income">Income</option>
-                    <option value="Essential">Essential</option>
-                    <option value="Luxury">Luxury</option>
-                    <option value="Savings">Savings</option>
-                  </select>
-                  <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl py-3 flex justify-center gap-2 transition-all shadow-lg shadow-blue-600/20"><Send size={16} /> Add</button>
-                </form>
+              {/* NEW: TWO-COLUMN GRID FOR ENTRY AND SAFETY NET */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* QUICK ENTRY FORM (Takes 2/3 of space) */}
+                <div className="lg:col-span-2 bg-white dark:bg-[#161f2e] border border-slate-200 dark:border-white/5 rounded-[2rem] p-8 shadow-sm">
+                  <h3 className="text-md font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2"><Plus className="w-5 h-5 text-blue-500" /> Quick Entry</h3>
+                  <form onSubmit={handleAddEntry} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <input placeholder="Item Name" value={name} onChange={(e) => setName(e.target.value)} className="bg-slate-50 dark:bg-[#0b121f] border border-slate-200 dark:border-white/5 rounded-xl p-3 text-sm text-slate-900 dark:text-white outline-none focus:border-blue-500" />
+                    <input type="number" placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} className="bg-slate-50 dark:bg-[#0b121f] border border-slate-200 dark:border-white/5 rounded-xl p-3 text-sm text-slate-900 dark:text-white outline-none focus:border-blue-500" />
+                    <div className="relative flex items-center">
+                      {/* THIS IS THE NEW PART: A small colored circle that reacts to your choice */}
+                      <div className={`absolute left-3 w-2 h-2 rounded-full transition-all ${categoryConfig[category]?.bg || 'bg-slate-400'}`}></div>
+
+                      <select
+                        value={category}
+                        onChange={(e) => setCategory(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-[#0b121f] border border-slate-200 dark:border-white/5 rounded-xl p-3 pl-8 text-sm outline-none dark:text-white appearance-none cursor-pointer"
+                      >
+                        <option value="Essential">Essential</option>
+                        <option value="Luxury">Luxury</option>
+                        <option value="Savings">Savings</option>
+                        <option value="Withdrawal">Withdrawal</option>
+                        <option value="Income">Income</option>
+                      </select>
+                    </div>
+                    <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl py-3 flex justify-center gap-2 transition-all shadow-lg shadow-blue-600/20"><Send size={16} /> Add</button>
+                  </form>
+                </div>
+
+                {/* FINANCIAL RUNWAY CARD (Takes 1/3 of space) */}
+                <div className="bg-white dark:bg-[#161f2e] p-8 rounded-[2rem] shadow-sm border border-slate-200 dark:border-white/5 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
+                      <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Financial Runway</h3>
+                    </div>
+                    <p className="text-3xl font-black text-slate-900 dark:text-white">
+                      {safetyNet} <span className="text-sm font-medium opacity-50 uppercase">Months</span>
+                    </p>
+                  </div>
+                  <div className="mt-4">
+                    <div className="w-full h-2 bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-1000"
+                        style={{ width: `${Math.min((parseFloat(safetyNet) / 6) * 100, 100)}%` }}
+                      ></div>
+                    </div>
+                    <p className="text-[9px] mt-2 opacity-50 font-bold uppercase tracking-tighter">
+                      Target: 6 Months Safety
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           )}
 
           {activeTab === 'Reports' && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in slide-in-from-bottom-4">
-              <div className="lg:col-span-2 bg-white dark:bg-[#161f2e] border border-slate-200 dark:border-white/5 rounded-[2.5rem] p-8 flex flex-col shadow-sm">
-                <h3 className="font-bold text-slate-900 dark:text-white mb-10 flex items-center gap-2 text-lg"><PieIcon className="text-blue-500" size={22} /> Spending Analysis</h3>
-                <div className="flex items-end justify-around h-72 gap-4 pb-4 border-b border-slate-100 dark:border-white/5">
+
+              {/* LEFT: SPENDING BARS & PIE DISTRIBUTION */}
+              <div className="lg:col-span-2 bg-white dark:bg-[#161f2e] border border-slate-200 dark:border-white/5 rounded-[3rem] p-10 flex flex-col shadow-sm">
+                <h3 className="font-bold text-slate-900 dark:text-white mb-10 flex items-center gap-2 text-lg">
+                  <BarChart3 className="text-blue-500" size={22} /> Spending Analysis
+                </h3>
+
+                {/* YOUR ORIGINAL BARS */}
+                <div className="flex items-end justify-around h-72 gap-6 pb-6 border-b border-slate-100 dark:border-white/5">
                   {['Essential', 'Luxury', 'Savings'].map((cat) => {
-                    const val = totals[cat];
+                    const val = totals[cat] || 0;
                     const max = Math.max(totals.Essential, totals.Luxury, totals.Savings, 1);
                     const height = (val / max) * 100;
                     return (
                       <div key={cat} className="flex flex-col items-center flex-1 h-full justify-end group cursor-pointer">
-                        <div className={`w-full max-w-[80px] rounded-t-2xl transition-all duration-1000 relative ${cat === 'Essential' ? 'bg-blue-500' : cat === 'Luxury' ? 'bg-orange-400' : 'bg-emerald-500'}`} style={{ height: `${height}%` }}>
-                          <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-slate-900 px-3 py-1.5 rounded-lg text-xs font-bold text-white opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-2xl">{currency}{val.toLocaleString()}</div>
+                        <div
+                          className={`w-full max-w-[85px] rounded-t-[1.5rem] transition-all duration-1000 relative ${categoryConfig[cat]?.bg}`}
+                          style={{ height: `${height}%` }}
+                        >
+                          <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-slate-900 px-3 py-1.5 rounded-xl text-xs font-black text-white opacity-0 group-hover:opacity-100 transition-all z-10 shadow-2xl">
+                            {currency}{val.toLocaleString()}
+                          </div>
                         </div>
-                        <span className="text-[10px] text-slate-400 font-black mt-6 uppercase tracking-widest">{cat}</span>
+                        <span className="text-[10px] text-slate-400 font-black mt-6 uppercase tracking-[0.2em]">{cat}</span>
                       </div>
                     );
                   })}
                 </div>
-              </div>
-              <div className="bg-white dark:bg-[#161f2e] border border-slate-200 dark:border-white/5 rounded-[2.5rem] p-8 flex flex-col items-center justify-center text-center shadow-sm">
-                <div className="relative w-32 h-32 mb-6">
-                  <svg className="w-full h-full" viewBox="0 0 36 36">
-                    <path className="text-slate-100 dark:text-white/5" strokeDasharray="100, 100" stroke="currentColor" strokeWidth="3" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                    <path className="text-blue-500 transition-all duration-1000" strokeDasharray={`${efficiency}, 100`} stroke="currentColor" strokeWidth="3" strokeLinecap="round" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                  </svg>
-                  <div className="absolute inset-0 flex items-center justify-center font-black text-2xl text-slate-900 dark:text-white">{efficiency}%</div>
+
+                {/* PIE CHART INTEGRATION */}
+                <div className="mt-12 flex flex-col md:flex-row items-center gap-12 px-4">
+                  <div
+                    className="w-36 h-36 rounded-full relative shadow-2xl shrink-0"
+                    style={{
+                      background: `conic-gradient(
+              ${categoryConfig.Essential.color} 0% ${allocationData.essential}%, 
+              ${categoryConfig.Luxury.color} ${allocationData.essential}% ${allocationData.essential + allocationData.luxury}%, 
+              ${categoryConfig.Savings.color} ${allocationData.essential + allocationData.luxury}% 100%
+            )`
+                    }}
+                  >
+                    <div className="absolute inset-10 bg-white dark:bg-[#161f2e] rounded-full flex flex-col items-center justify-center">
+                      <span className="text-[8px] font-black opacity-30 uppercase tracking-tighter">Budget</span>
+                      <span className="text-xs font-black dark:text-white">Split</span>
+                    </div>
+                  </div>
+
+                  <div className="flex-1 grid grid-cols-3 gap-6 w-full text-center md:text-left">
+                    {['Essential', 'Luxury', 'Savings'].map(cat => (
+                      <div key={cat} className="space-y-1">
+                        <div className="flex items-center justify-center md:justify-start gap-2">
+                          <div className={`w-2 h-2 rounded-full ${categoryConfig[cat].bg}`}></div>
+                          <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">{cat}</span>
+                        </div>
+                        <p className="text-2xl font-black dark:text-white">{Math.round(allocationData[cat.toLowerCase()] || 0)}%</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <h4 className="text-lg font-bold text-slate-900 dark:text-white">Efficiency Gauge</h4>
-                <p className="text-xs text-slate-500 mt-2 font-medium">Spending vs Income Ratio</p>
               </div>
+
+              {/* RIGHT: WEALTHINTELLIGENCE AI (Upgraded) */}
+              <div className={`rounded-[3rem] p-10 text-white shadow-2xl flex flex-col relative overflow-hidden h-full min-h-[650px] transition-all duration-1000
+      ${efficiency >= 20 ? 'bg-emerald-600 shadow-emerald-500/20' : 'bg-blue-600 shadow-blue-500/20'}`}>
+
+                <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-[80px]"></div>
+
+                <div className="relative z-10 flex flex-col h-full items-center">
+                  <div className="flex items-center gap-2 mb-12 self-start">
+                    <Zap size={20} className="text-white/80" fill="currentColor" />
+                    <h1 className="font-black text-xl tracking-tight uppercase">FinTrack AI</h1>
+                  </div>
+
+                  {/* ARROW GAUGE */}
+                  <div className="relative w-64 h-32 overflow-hidden mb-8">
+                    <div className="w-64 h-64 border-[16px] border-white/10 rounded-full"></div>
+                    <div
+                      className="absolute bottom-0 left-1/2 w-1.5 h-28 bg-white origin-bottom transition-all duration-1000 ease-out shadow-[0_0_15px_white]"
+                      style={{ transform: `translateX(-50%) rotate(${(efficiency / 100) * 180 - 90}deg)` }}
+                    >
+                      <div className="w-4 h-4 bg-white rounded-full absolute -top-1 left-1/2 -translate-x-1/2 border-2 border-emerald-600"></div>
+                    </div>
+                  </div>
+
+                  <div className="text-center mb-10">
+                    <span className="text-7xl font-black tracking-tighter tabular-nums">{efficiency}%</span>
+                    <p className="text-[10px] font-black uppercase tracking-[0.4em] opacity-60 mt-2">Retention Score</p>
+                  </div>
+
+                  {/* NEW: STATUS MONITOR */}
+                  <div className="w-full space-y-4 mb-8">
+                    <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest opacity-70">
+                      <span>Monthly Target</span>
+                      <span>{currency}20,000</span>
+                    </div>
+                    <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
+                      <div className="h-full bg-white transition-all duration-1000" style={{ width: `${Math.min(efficiency, 100)}%` }}></div>
+                    </div>
+                  </div>
+
+                  {/* THE AI INSIGHT & PROJECTION */}
+                  <div className="mt-auto w-full space-y-6">
+
+                    {/* FUTURE FORECAST BOX */}
+                    <div className="bg-white/10 backdrop-blur-md p-6 rounded-[2rem] border border-white/10">
+                      <div className="flex justify-between items-center mb-4 border-b border-white/10 pb-3">
+                        <span className="text-[9px] font-black uppercase tracking-widest opacity-60">1-Year Forecast</span>
+                        <span className="text-lg font-black">{currency}{yearlyProjection.toLocaleString()}</span>
+                      </div>
+
+                      <div className="flex justify-between items-center">
+                        <span className="text-[9px] font-black uppercase tracking-widest opacity-60">5-Year Growth</span>
+                        <span className="text-lg font-black text-emerald-300">{currency}{fiveYearProjection.toLocaleString()}*</span>
+                      </div>
+
+                      <p className="text-[8px] font-medium opacity-40 mt-3 text-center uppercase tracking-tighter italic">
+                        *Based on current {efficiency}% retention rate
+                      </p>
+                    </div>
+
+                    {/* THE AI INSIGHT TEXT */}
+                    <div className="text-center px-2">
+                      <p className="text-sm font-bold leading-relaxed italic opacity-90">
+                        "{proInsight}"
+                      </p>
+                    </div>
+
+                    {/* SYSTEM STATUS */}
+                    <div className="flex items-center justify-center gap-2 pt-4">
+                      <div className="w-2 h-2 rounded-full bg-white animate-pulse shadow-[0_0_8px_white]"></div>
+                      <span className="text-[9px] font-black uppercase tracking-widest opacity-60 italic">Projection Engine: Online</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
             </div>
           )}
 
@@ -340,6 +725,7 @@ const Dashboard = ({ user, setUser }) => {
 
           {activeTab === 'Profile' && (
             <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 pb-10">
+              {/* USER HEADER CARD - UNCHANGED */}
               <div className="bg-white dark:bg-[#161f2e] border border-slate-200 dark:border-white/5 rounded-[2.5rem] p-8 shadow-sm">
                 <div className="flex flex-col md:flex-row items-center gap-8">
                   <div className="relative group">
@@ -360,6 +746,7 @@ const Dashboard = ({ user, setUser }) => {
                 </div>
               </div>
 
+              {/* STATS STRIP - UNCHANGED */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {[
                   { label: 'Total Income', val: totalIncome, color: 'text-emerald-500', bg: 'bg-emerald-500/5' },
@@ -375,6 +762,7 @@ const Dashboard = ({ user, setUser }) => {
                 ))}
               </div>
 
+              {/* REVENUE STREAMS - UNCHANGED */}
               <div className="bg-white dark:bg-[#161f2e] border border-slate-200 dark:border-white/5 rounded-[2.5rem] p-8 shadow-sm">
                 <div className="flex justify-between items-center mb-8">
                   <div>
@@ -399,6 +787,62 @@ const Dashboard = ({ user, setUser }) => {
                 </div>
               </div>
 
+              {/* NEW: ADVANCED INTEGRATIONS SECTION */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Security & Alerts */}
+                <div className="bg-white dark:bg-[#161f2e] border border-slate-200 dark:border-white/5 rounded-[2.5rem] p-8 shadow-sm">
+                  <h4 className="font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2"><Sparkles size={18} className="text-blue-500" /> FinTrack Intelligence</h4>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-[#0b121f] rounded-2xl border border-slate-200 dark:border-white/5">
+                      <div>
+                        <p className="text-sm font-bold text-slate-900 dark:text-white">Smart Push Alerts</p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">Notify on high spending</p>
+                      </div>
+                      <button onClick={() => setIsAlertsEnabled(!isAlertsEnabled)} className={`w-10 h-5 rounded-full transition-all relative ${isAlertsEnabled ? 'bg-blue-600' : 'bg-slate-300'}`}>
+                        <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${isAlertsEnabled ? 'left-6' : 'left-1'}`}></div>
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-[#0b121f] rounded-2xl border border-slate-200 dark:border-white/5">
+                      <div>
+                        <p className="text-sm font-bold text-slate-900 dark:text-white">2FA Security</p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">Biometric/Cloud Auth</p>
+                      </div>
+                      <button onClick={() => setIs2FAEnabled(!is2FAEnabled)} className={`w-10 h-5 rounded-full transition-all relative ${is2FAEnabled ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+                        <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${is2FAEnabled ? 'left-6' : 'left-1'}`}></div>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Reports & Documents */}
+                <div className="bg-white dark:bg-[#161f2e] border border-slate-200 dark:border-white/5 rounded-[2.5rem] p-8 shadow-sm">
+                  <h4 className="font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
+                    <WalletIcon size={18} className="text-blue-500" /> Vault & Data
+                  </h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* BUTTON 1: THE AUDIT */}
+                    <button
+                      onClick={handleExportFinancialAudit}
+                      className="flex flex-col items-center justify-center p-6 bg-blue-600/5 hover:bg-blue-600/10 border border-blue-500/10 rounded-[2rem] transition-all group"
+                    >
+                      <ShieldCheck className="text-blue-500 mb-2 group-hover:scale-110 transition-transform" size={28} />
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Generate Audit</span>
+                    </button>
+                    {/* BUTTON 2: THE BACKUP */}
+                    <button
+                      onClick={handleExportCSV}
+                      className="flex flex-col items-center justify-center p-6 bg-amber-600/5 hover:bg-amber-600/10 border border-amber-500/10 rounded-[2rem] transition-all group"
+                    >
+                      <CloudDownload className="text-amber-500 mb-2 group-hover:scale-110 transition-transform" size={28} />
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                        ExportCSV
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* SESSION MANAGEMENT - UNCHANGED */}
               <div className="bg-rose-500/5 border border-rose-500/10 rounded-[2.5rem] p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
                 <div className="text-center md:text-left">
                   <h4 className="font-bold text-rose-500 text-lg mb-1">Session Management</h4>
@@ -413,6 +857,7 @@ const Dashboard = ({ user, setUser }) => {
         </section>
       </main>
 
+      {/* MOBILE MENU */}
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-50 bg-white dark:bg-[#0b121f] p-6 flex flex-col animate-in slide-in-from-left duration-300 lg:hidden">
           <div className="flex justify-between items-center mb-10">
@@ -431,6 +876,5 @@ const Dashboard = ({ user, setUser }) => {
       )}
     </div>
   );
-};
-
+}
 export default Dashboard;

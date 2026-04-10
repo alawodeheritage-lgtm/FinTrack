@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Mail, Lock, Eye, EyeOff, LogIn, Loader2 } from "lucide-react";
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { account } from '../lib/appwrite';
 import Swal from 'sweetalert2';
 
@@ -10,6 +10,8 @@ const Login = ({ setUser }) => {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+
+  const location = useLocation();
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -32,6 +34,8 @@ const Login = ({ setUser }) => {
         setUser(userDetails);
       }
 
+      const destination = location.state?.from || '/dashboard';
+
       Swal.fire({
         title: 'Welcome Back!',
         text: `Logging you in, ${userDetails.name}...`,
@@ -41,7 +45,7 @@ const Login = ({ setUser }) => {
         showConfirmButton: false,
         timer: 1500
       }).then(() => {
-        navigate('/dashboard');
+        navigate(destination);
       });
     } catch (error) {
       Swal.fire({
@@ -94,7 +98,7 @@ const Login = ({ setUser }) => {
           <div className="flex flex-col gap-2">
             <div className="flex justify-between items-center ml-1">
               <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Password</label>
-              <button type="button" className="text-sm font-bold text-blue-600 hover:text-blue-500">Forgot Password?</button>
+              <Link to="/forgot-password" className="text-sm font-bold text-blue-600 hover:text-blue-500">Forgot Password?</Link>
             </div>
             <div className="relative group">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors w-5 h-5" />
@@ -127,6 +131,10 @@ const Login = ({ setUser }) => {
         </form>
 
         <p className="text-center mt-12 text-slate-500 font-medium">
+          <Link to="/" className="text-blue-600 font-bold cursor-pointer hover:underline">Back to Home</Link>
+        </p>
+
+        <p className="text-center mt-4 text-slate-500 font-medium">
           Don't have an account? <Link to="/signup" className="text-blue-600 font-bold cursor-pointer hover:underline">Sign Up</Link>
         </p>
       </div>

@@ -47,19 +47,16 @@ const SignUp = ({ setUser }) => { // Logic: Added setUser prop
     setIsLoading(true);
 
     try {
-      // Logic Fix: Clear ghost sessions to prevent "Session Active" error
+      // 1. Logic Fix: Clear ghost sessions to prevent "Session Active" error
       try {
         await account.deleteSession('current');
-      } catch (err) { }
+      } catch (err) { /* No session to delete, move on */ }
 
-      // 1. Create the Appwrite Account
+      // 2. Create the Appwrite Account
       await account.create(ID.unique(), email, password, fullName);
 
-      // 2. Create Session
+      // 3. Create Session (Needed to update preferences)
       await account.createEmailPasswordSession(email, password);
-
-      // 3. Get User Data immediately
-      const userDetails = await account.get();
 
       // 4. Update Preferences
       const selectedCountry = countryData.find(c => c.name === nationality);
@@ -70,21 +67,28 @@ const SignUp = ({ setUser }) => { // Logic: Added setUser prop
         nationality: nationality
       });
 
-      // Logic Fix: Tell the app the user is officially logged in
+      // 5. THE INTEGRATION FIX: 
+      // We logout immediately after saving prefs so the user isn't "active" 
+      // when they reach the Login page.
+      await account.deleteSession('current');
+
+      // 6. Tell the app the user is NULL (Logged out)
+      // This stops App.jsx from kicking the user to the Dashboard
       if (setUser) {
-        setUser(userDetails);
+        setUser(null);
       }
 
       Swal.fire({
         title: 'Account Created!',
-        text: `Welcome to FinTrack! Your currency is set to ${userCurrency}.`,
+        text: `Welcome to FinTrack! Your currency is set to ${userCurrency}. Please log in to continue.`,
         icon: 'success',
         background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff',
         color: document.documentElement.classList.contains('dark') ? '#fff' : '#000',
         confirmButtonColor: '#2563eb',
-        confirmButtonText: 'Go to Dashboard'
+        confirmButtonText: 'Go to Login'
       }).then(() => {
-        navigate('/dashboard');
+        // 7. Now this redirect will stay on the Login page!
+        navigate('/login');
       });
 
     } catch (error) {
@@ -99,7 +103,6 @@ const SignUp = ({ setUser }) => { // Logic: Added setUser prop
       setIsLoading(false);
     }
   };
-
   return (
     <div className="min-h-screen w-full bg-white dark:bg-[#050b18] text-slate-900 dark:text-slate-50 flex flex-col items-center px-6 py-12 font-sans transition-colors duration-500">
       <header className="flex flex-col items-center gap-4 mb-10">
@@ -178,7 +181,11 @@ const SignUp = ({ setUser }) => { // Logic: Added setUser prop
         </button>
       </form>
 
-      <p className="mt-auto pt-10 text-slate-500 text-sm font-medium">Already have an account? <Link to="/login" className="text-[#2563eb] font-bold hover:underline">Log In</Link></p>
+      <p className="mt-auto pt-10 text-slate-500 text-sm font-medium">
+        <Link to="/" className="text-[#2563eb] font-bold hover:underline">Back to Home</Link>
+      </p>
+
+      <p className="mt-4 text-slate-500 text-sm font-medium">Already have an account? <Link to="/login" className="text-[#2563eb] font-bold hover:underline">Log In</Link></p>
     </div>
   );
 };

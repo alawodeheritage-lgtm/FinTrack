@@ -8,6 +8,9 @@ import Home from "./Components/Home";
 import Login from "./Auth/Login";
 import SignUp from "./Auth/SignUp";
 import Dashboard from "./Components/Dashboard";
+import ForgotPassword from "./Auth/ForgotPassword";
+import ResetPassword from "./Auth/resetPassword";
+import ProtectedRoute from "./ProtectedRoute";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -17,7 +20,8 @@ function App() {
     const checkUser = async () => {
       try {
         const session = await account.get();
-        setUser(session);
+        setUser(session
+        );
       } catch (error) {
         setUser(null);
       } finally {
@@ -51,13 +55,25 @@ function App() {
         />
         <Route
           path="/signup"
-          element={!user ? <SignUp setUser={setUser} /> : <Navigate to="/dashboard" />}
+          element={!user ? <SignUp setUser={setUser} /> : <Navigate to="/login" />}
+        />
+        <Route
+          path="/forgot-password"
+          element={!user ? <ForgotPassword /> : <Navigate to="/dashboard" />}
+        />
+        <Route
+          path="/reset-password"
+          element={<ResetPassword />}
         />
 
         {/* 3. Protected Route: Only accessible if logged in */}
         <Route
           path="/dashboard"
-          element={user ? <Dashboard user={user} setUser={setUser} /> : <Navigate to="/login" />}
+          element={
+            <ProtectedRoute user={user}>
+              <Dashboard user={user} setUser={setUser} />
+            </ProtectedRoute>
+          }
         />
 
         {/* 4. Catch-all: Redirect unknown paths */}
