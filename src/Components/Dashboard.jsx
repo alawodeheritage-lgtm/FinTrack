@@ -52,19 +52,39 @@ const Dashboard = ({ user, setUser }) => {
 
   const fetchData = async () => {
     try {
-      const response = await databases.listDocuments(
+      // 1. FAST LOAD: Get the first 50 items immediately so the UI isn't "hanging"
+      const firstResponse = await databases.listDocuments(
         DATABASE_ID,
         COLLECTION_ID,
-        [Query.equal("userId", user.$id), Query.orderDesc("createdAt")]
+        [
+          Query.equal("userId", user.$id),
+          Query.orderDesc("createdAt"),
+          Query.limit(50)
+        ]
       );
-      setExpenses(response.documents);
+
+      setExpenses(firstResponse.documents);
+      setIsLoading(false); // UI shows up now!
+
+      // 2. BACKGROUND LOAD: Now get the rest (up to 1000) without making the user wait
+      const fullResponse = await databases.listDocuments(
+        DATABASE_ID,
+        COLLECTION_ID,
+        [
+          Query.equal("userId", user.$id),
+          Query.orderDesc("createdAt"),
+          Query.limit(1000)
+        ]
+      );
+
+      // This updates the list silently in the background
+      setExpenses(fullResponse.documents);
+
     } catch (error) {
       console.error("Cloud Fetch Error:", error);
-    } finally {
       setIsLoading(false);
     }
   };
-
   useEffect(() => { if (user) fetchData(); }, [user]);
 
   const handleAddEntry = async (e) => {

@@ -13,7 +13,8 @@ const ForgotPassword = () => {
     setIsLoading(true);
 
     try {
-      await account.createRecovery(email, `${window.location.origin}/reset-password`);
+      const baseUrl = import.meta.env.VITE_BASE_URL || window.location.origin;
+      await account.createRecovery(email, `${baseUrl}/reset-password`);
       Swal.fire({
         title: 'Check Your Email',
         text: 'We\'ve sent you a password reset link.',
