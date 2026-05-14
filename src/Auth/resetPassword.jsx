@@ -8,6 +8,7 @@ const ResetPassword = () => {
   const [status, setStatus] = useState('idle'); // 'idle', 'loading', 'success', 'error'
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [validLink, setValidLink] = useState(true); // New state to track link validity
 
   // Apply theme from Home page
   useEffect(() => {
@@ -18,6 +19,15 @@ const ResetPassword = () => {
       root.classList.add('dark');
     } else {
       root.classList.remove('dark');
+    }
+
+    // 2. Professional Link Validation
+    const urlParams = new URLSearchParams(window.location.search);
+    const userId = urlParams.get('userId');
+    const secret = urlParams.get('secret');
+
+    if (!userId || !secret) {
+      setValidLink(false); // If params are missing, hide the form
     }
   }, []);
 
@@ -44,7 +54,24 @@ const ResetPassword = () => {
     <div className="min-h-screen bg-white dark:bg-[#050b18] text-slate-900 dark:text-white font-sans flex items-center justify-center p-6 transition-colors duration-500">
       <div className="max-w-md w-full bg-white dark:bg-[#161f2e] border border-slate-200 dark:border-white/5 rounded-[2rem] p-10 shadow-2xl text-center">
 
-        {status !== 'success' ? (
+        {!validLink ? (
+          /* --- PROFESSIONAL ERROR STATE --- */
+          <div className="space-y-6 animate-in fade-in duration-500">
+            <div className="w-20 h-20 bg-red-500/10 rounded-[2.5rem] flex items-center justify-center mx-auto mb-6">
+              <ShieldCheck className="text-red-500 rotate-180" size={35} />
+            </div>
+            <h1 className="text-xl font-black text-slate-900 dark:text-white uppercase">Invalid Link</h1>
+            <p className="text-slate-500 dark:text-slate-400 text-xs">
+              This password reset link is invalid or has expired. Please request a new one from the login page.
+            </p>
+            <button
+              onClick={() => window.location.href = '/login'}
+              className="w-full bg-slate-900 dark:bg-white dark:text-black text-white p-5 rounded-[2rem] font-black uppercase text-xs tracking-widest hover:opacity-90 transition-all"
+            >
+              Back to Login
+            </button>
+          </div>
+        ) : status !== 'success' ? (
           <form onSubmit={handleUpdate} className="space-y-6">
             <div className="w-20 h-20 bg-blue-500/10 rounded-[2.5rem] flex items-center justify-center mx-auto mb-6">
               <KeyRound className="text-blue-600 dark:text-blue-500" size={35} />
@@ -110,7 +137,6 @@ const ResetPassword = () => {
         )}
       </div>
     </div>
-  );
   );
 };
 
