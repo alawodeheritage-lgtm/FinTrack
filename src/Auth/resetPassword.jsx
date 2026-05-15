@@ -9,6 +9,7 @@ const ResetPassword = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [validLink, setValidLink] = useState(true); // New state to track link validity
+  const [recoveryData, setRecoveryData] = useState({ userId: '', secret: '' });
 
   // Apply theme from Home page
   useEffect(() => {
@@ -28,21 +29,23 @@ const ResetPassword = () => {
 
     if (!userId || !secret) {
       setValidLink(false); // If params are missing, hide the form
+      return;
     }
+
+    setRecoveryData({ userId, secret });
+    window.history.replaceState(null, '', window.location.pathname);
   }, []);
 
   const handleUpdate = async (e) => {
     e.preventDefault();
     if (password !== confirmPassword) return alert("Passwords don't match!");
-
-    // Appwrite automatically puts these in the URL
-    const urlParams = new URLSearchParams(window.location.search);
-    const userId = urlParams.get('userId');
-    const secret = urlParams.get('secret');
+    if (password.length < 8) return alert('Password must be at least 8 characters long.');
+    if (!/[0-9]/.test(password) || !/[!@#$%^&*]/.test(password)) return alert('Use at least one number and one special character.');
+    if (!recoveryData.userId || !recoveryData.secret) return alert('Recovery data is missing or invalid.');
 
     try {
       setStatus('loading');
-      await account.updateRecovery(userId, secret, password, confirmPassword);
+      await account.updateRecovery(recoveryData.userId, recoveryData.secret, password, confirmPassword);
       setStatus('success');
     } catch (error) {
       console.error(error);

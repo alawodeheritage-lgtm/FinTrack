@@ -8,7 +8,7 @@ import {
   LayoutDashboard, ReceiptText, Wallet as WalletIcon,
   BarChart3, Zap, /* Add this one*/ Settings, Search, FileText, Bell, Plus, Trash2,
   Home, Utensils, TrendingUp, Bus, ChevronDown, Send, Menu, X,
-  PieChart as PieIcon, User, LogOut, Loader2, ArrowUpDown, ShieldCheck, // <--- Add this
+  PieChart as PieIcon, User, LogOut, Loader2, ArrowUpDown, ShieldCheck, Edit3,
   Database, CloudDownload, Sparkles
 } from 'lucide-react';
 
@@ -38,6 +38,7 @@ const Dashboard = ({ user, setUser }) => {
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState("Essential");
+  const [editingId, setEditingId] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCat, setFilterCat] = useState("All");
   const [sortBy, setSortBy] = useState("date");
@@ -87,6 +88,13 @@ const Dashboard = ({ user, setUser }) => {
   };
   useEffect(() => { if (user) fetchData(); }, [user]);
 
+  const resetForm = () => {
+    setName("");
+    setAmount("");
+    setCategory("Essential");
+    setEditingId(null);
+  };
+
   const handleAddEntry = async (e) => {
     e.preventDefault();
     if (!name || !amount) {
@@ -95,16 +103,28 @@ const Dashboard = ({ user, setUser }) => {
     }
 
     try {
-      await databases.createDocument(DATABASE_ID, COLLECTION_ID, ID.unique(), {
-        title: name,
-        amount: parseFloat(amount),
-        category: category,
-        userId: user.$id,
-        createdAt: new Date().toISOString()
-      });
-      setName(""); setAmount("");
+      if (editingId) {
+        await databases.updateDocument(DATABASE_ID, COLLECTION_ID, editingId, {
+          title: name,
+          amount: parseFloat(amount),
+          category: category
+        });
+
+        Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Entry updated', showConfirmButton: false, timer: 1500 });
+      } else {
+        await databases.createDocument(DATABASE_ID, COLLECTION_ID, ID.unique(), {
+          title: name,
+          amount: parseFloat(amount),
+          category: category,
+          userId: user.$id,
+          createdAt: new Date().toISOString()
+        });
+
+        Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Saved Successfully', showConfirmButton: false, timer: 1500 });
+      }
+
+      resetForm();
       fetchData();
-      Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Saved Successfully', showConfirmButton: false, timer: 1500 });
     } catch (error) {
       Swal.fire('Error', error.message, 'error');
     }
@@ -130,6 +150,7 @@ const Dashboard = ({ user, setUser }) => {
         // Line 181 - The "await" is now safely inside an "async" function
         await databases.deleteDocument(DATABASE_ID, COLLECTION_ID, id);
         fetchData();
+        if (editingId === id) resetForm();
         Swal.fire({
           toast: true,
           position: 'top-end',
@@ -150,6 +171,14 @@ const Dashboard = ({ user, setUser }) => {
         });
       }
     }
+  };
+
+  const handleEdit = (item) => {
+    setName(item.title || "");
+    setAmount(item.amount?.toString() || "");
+    setCategory(item.category || "Essential");
+    setEditingId(item.$id);
+    setActiveTab('Dashboard');
   };
 
   const handleUploadReceipt = async (e) => {
@@ -340,7 +369,7 @@ const Dashboard = ({ user, setUser }) => {
     const essential = expenses.filter(e => e.category === 'Essential').reduce((acc, curr) => acc + curr.amount, 0);
     const luxury = expenses.filter(e => e.category === 'Luxury').reduce((acc, curr) => acc + curr.amount, 0);
 
-    // LOGIC: Savings = (All Money put IN) minus (All Money taken OUT)
+    // LOGIC: Savings = deposits minus withdrawals
     const savingsDeposits = expenses.filter(e => e.category === 'Savings').reduce((acc, curr) => acc + curr.amount, 0);
     const withdrawals = expenses.filter(e => e.category === 'Withdrawal').reduce((acc, curr) => acc + curr.amount, 0);
 
@@ -511,11 +540,23 @@ const Dashboard = ({ user, setUser }) => {
                 {/* QUICK ENTRY FORM (Takes 2/3 of space) */}
                 <div className="lg:col-span-2 bg-white dark:bg-[#161f2e] border border-slate-200 dark:border-white/5 rounded-[2rem] p-8 shadow-sm">
                   <h3 className="text-md font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2"><Plus className="w-5 h-5 text-blue-500" /> Quick Entry</h3>
+                  {totalIncome > 0 && efficiency < 20 && (
+                    <div className="rounded-3xl border border-amber-300/40 bg-amber-50/80 dark:bg-amber-500/10 p-4 mb-4 text-sm text-amber-700 dark:text-amber-200">
+                      <p className="font-bold">Savings Booster</p>
+                      <p>You are saving only {efficiency}% of your income. Aim for at least 20% of monthly earnings.</p>
+                      <button
+                        type="button"
+                        onClick={() => { setCategory('Savings'); setName('Savings Deposit'); }}
+                        className="mt-3 inline-flex items-center gap-2 rounded-full bg-amber-500 text-white px-4 py-2 text-xs font-bold uppercase tracking-wider hover:bg-amber-400 transition"
+                      >
+                        Use Savings Category
+                      </button>
+                    </div>
+                  )}
                   <form onSubmit={handleAddEntry} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <input placeholder="Item Name" value={name} onChange={(e) => setName(e.target.value)} className="bg-slate-50 dark:bg-[#0b121f] border border-slate-200 dark:border-white/5 rounded-xl p-3 text-sm text-slate-900 dark:text-white outline-none focus:border-blue-500" />
                     <input type="number" placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} className="bg-slate-50 dark:bg-[#0b121f] border border-slate-200 dark:border-white/5 rounded-xl p-3 text-sm text-slate-900 dark:text-white outline-none focus:border-blue-500" />
                     <div className="relative flex items-center">
-                      {/* THIS IS THE NEW PART: A small colored circle that reacts to your choice */}
                       <div className={`absolute left-3 w-2 h-2 rounded-full transition-all ${categoryConfig[category]?.bg || 'bg-slate-400'}`}></div>
 
                       <select
@@ -530,7 +571,16 @@ const Dashboard = ({ user, setUser }) => {
                         <option value="Income">Income</option>
                       </select>
                     </div>
-                    <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl py-3 flex justify-center gap-2 transition-all shadow-lg shadow-blue-600/20"><Send size={16} /> Add</button>
+                    <div className="flex gap-3 items-center">
+                      <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl py-3 flex justify-center gap-2 transition-all shadow-lg shadow-blue-600/20">
+                        <Send size={16} /> {editingId ? 'Update' : 'Add'}
+                      </button>
+                      {editingId && (
+                        <button type="button" onClick={resetForm} className="w-full bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white font-bold rounded-xl py-3 transition-all hover:bg-slate-300 dark:hover:bg-slate-600">
+                          Cancel
+                        </button>
+                      )}
+                    </div>
                   </form>
                 </div>
 
@@ -733,8 +783,9 @@ const Dashboard = ({ user, setUser }) => {
                         <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">{item.category} • {new Date(item.createdAt).toLocaleDateString()}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-4">
                       <span className="text-lg font-bold text-slate-900 dark:text-white">-{currency}{item.amount.toLocaleString()}</span>
+                      <button onClick={() => handleEdit(item)} className="text-slate-300 hover:text-blue-500 transition-colors"><Edit3 size={18} /></button>
                       <button onClick={() => handleDelete(item.$id)} className="text-slate-300 hover:text-rose-500 transition-colors"><Trash2 size={18} /></button>
                     </div>
                   </div>
@@ -771,7 +822,7 @@ const Dashboard = ({ user, setUser }) => {
                 {[
                   { label: 'Total Income', val: totalIncome, color: 'text-emerald-500', bg: 'bg-emerald-500/5' },
                   { label: 'Total Expenses', val: totalSpent, color: 'text-rose-500', bg: 'bg-rose-500/5' },
-                  { label: 'Saved Ratio', val: `${100 - efficiency}%`, color: 'text-blue-500', bg: 'bg-blue-500/5' }
+                  { label: 'Saved Ratio', val: `${efficiency}%`, color: 'text-blue-500', bg: 'bg-blue-500/5' }
                 ].map((stat, i) => (
                   <div key={i} className={`${stat.bg} border border-slate-200 dark:border-white/5 p-6 rounded-[2rem] text-center`}>
                     <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">{stat.label}</p>
@@ -798,8 +849,9 @@ const Dashboard = ({ user, setUser }) => {
                         <div className="bg-emerald-500/10 p-2.5 rounded-xl text-emerald-600"><TrendingUp size={18} /></div>
                         <span className="font-bold text-slate-700 dark:text-slate-200">{source.title}</span>
                       </div>
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-3">
                         <span className="text-emerald-600 font-black">+{currency}{source.amount.toLocaleString()}</span>
+                        <button onClick={() => handleEdit(source)} className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-blue-500 transition-all"><Edit3 size={16} /></button>
                         <button onClick={() => handleDelete(source.$id)} className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-500 transition-all"><Trash2 size={16} /></button>
                       </div>
                     </div>
