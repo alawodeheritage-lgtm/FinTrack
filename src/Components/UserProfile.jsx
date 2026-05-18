@@ -1,0 +1,153 @@
+import React, { useState } from 'react';
+import { Plus, Edit3, Trash2, Sparkles, ShieldCheck, CloudDownload, LogOut, TrendingUp, WalletIcon } from 'lucide-react';
+
+const UserProfile = ({
+  user,
+  currency,
+  totalIncome,
+  totalSpent,
+  efficiency,
+  incomeItems,
+  handleEdit,
+  handleDelete,
+  handleExportFinancialAudit,
+  handleExportCSV,
+  handleLogout,
+  setActiveTab
+}) => {
+  const [isAlertsEnabled, setIsAlertsEnabled] = useState(true);
+  const [is2FAEnabled, setIs2FAEnabled] = useState(false);
+
+  return (
+    <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 pb-10">
+      {/* USER HEADER CARD */}
+      <div className="bg-white dark:bg-[#161f2e] border border-slate-200 dark:border-white/5 rounded-[2.5rem] p-8 shadow-sm">
+        <div className="flex flex-col md:flex-row items-center gap-8">
+          <div className="relative group">
+            <div className="w-32 h-32 rounded-[2.5rem] bg-blue-600 flex items-center justify-center text-white text-4xl font-black shadow-xl shadow-blue-600/20">
+              {user.name.charAt(0)}
+            </div>
+            <div className="absolute -bottom-2 -right-2 bg-emerald-500 border-4 border-white dark:border-[#161f2e] w-8 h-8 rounded-full shadow-sm"></div>
+          </div>
+          <div className="flex-grow text-center md:text-left">
+            <div className="flex flex-col md:flex-row md:items-center gap-3">
+              <h3 className="text-3xl font-black text-slate-900 dark:text-white">{user.name}</h3>
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-blue-600/10 text-blue-600 border border-blue-600/20 w-fit mx-auto md:mx-0">
+                Pro Member
+              </span>
+            </div>
+            <p className="text-slate-500 dark:text-slate-400 font-medium mt-2">{user.email}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* STATS STRIP */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {[
+          { label: 'Total Income', val: totalIncome, color: 'text-emerald-500', bg: 'bg-emerald-500/5' },
+          { label: 'Total Expenses', val: totalSpent, color: 'text-rose-500', bg: 'bg-rose-500/5' },
+          { label: 'Saved Ratio', val: `${efficiency}%`, color: 'text-blue-500', bg: 'bg-blue-500/5' }
+        ].map((stat, i) => (
+          <div key={i} className={`${stat.bg} border border-slate-200 dark:border-white/5 p-6 rounded-[2rem] text-center`}>
+            <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">{stat.label}</p>
+            <h4 className={`text-xl font-black ${stat.color}`}>
+              {typeof stat.val === 'number' ? `${currency}${stat.val.toLocaleString()}` : stat.val}
+            </h4>
+          </div>
+        ))}
+      </div>
+
+      {/* REVENUE STREAMS */}
+      <div className="bg-white dark:bg-[#161f2e] border border-slate-200 dark:border-white/5 rounded-[2.5rem] p-8 shadow-sm">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h4 className="font-bold text-slate-900 dark:text-white text-lg">Revenue Streams</h4>
+            <p className="text-xs text-slate-500 font-medium">Manage your incoming cloud data</p>
+          </div>
+          <button onClick={() => setActiveTab('Dashboard')} className="p-2 rounded-xl bg-slate-50 dark:bg-[#0b121f] text-blue-600 hover:bg-blue-600 hover:text-white transition-all"><Plus size={20} /></button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {incomeItems.map(source => (
+            <div key={source.$id} className="group flex justify-between items-center p-5 bg-slate-50 dark:bg-[#0b121f] rounded-[1.5rem] border border-slate-200 dark:border-white/5 hover:border-blue-500/30 transition-all">
+              <div className="flex items-center gap-4">
+                <div className="bg-emerald-500/10 p-2.5 rounded-xl text-emerald-600"><TrendingUp size={18} /></div>
+                <span className="font-bold text-slate-700 dark:text-slate-200">{source.title}</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-emerald-600 font-black">+{currency}{source.amount.toLocaleString()}</span>
+                <button onClick={() => handleEdit(source)} className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-blue-500 transition-all"><Edit3 size={16} /></button>
+                <button onClick={() => handleDelete(source.$id)} className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-500 transition-all"><Trash2 size={16} /></button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ADVANCED INTEGRATIONS SECTION */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Security & Alerts */}
+        <div className="bg-white dark:bg-[#161f2e] border border-slate-200 dark:border-white/5 rounded-[2.5rem] p-8 shadow-sm">
+          <h4 className="font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2"><Sparkles size={18} className="text-blue-500" /> FinTrack Intelligence</h4>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-[#0b121f] rounded-2xl border border-slate-200 dark:border-white/5">
+              <div>
+                <p className="text-sm font-bold text-slate-900 dark:text-white">Smart Push Alerts</p>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">Notify on high spending</p>
+              </div>
+              <button onClick={() => setIsAlertsEnabled(!isAlertsEnabled)} className={`w-10 h-5 rounded-full transition-all relative ${isAlertsEnabled ? 'bg-blue-600' : 'bg-slate-300'}`}>
+                <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${isAlertsEnabled ? 'left-6' : 'left-1'}`}></div>
+              </button>
+            </div>
+            <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-[#0b121f] rounded-2xl border border-slate-200 dark:border-white/5">
+              <div>
+                <p className="text-sm font-bold text-slate-900 dark:text-white">2FA Security</p>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">Biometric/Cloud Auth</p>
+              </div>
+              <button onClick={() => setIs2FAEnabled(!is2FAEnabled)} className={`w-10 h-5 rounded-full transition-all relative ${is2FAEnabled ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+                <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${is2FAEnabled ? 'left-6' : 'left-1'}`}></div>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Reports & Documents */}
+        <div className="bg-white dark:bg-[#161f2e] border border-slate-200 dark:border-white/5 rounded-[2.5rem] p-8 shadow-sm">
+          <h4 className="font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
+            <WalletIcon size={18} className="text-blue-500" /> Vault & Data
+          </h4>
+          <div className="grid grid-cols-2 gap-4">
+            {/* AUDIT BUTTON */}
+            <button
+              onClick={handleExportFinancialAudit}
+              className="flex flex-col items-center justify-center p-6 bg-blue-600/5 hover:bg-blue-600/10 border border-blue-500/10 rounded-[2rem] transition-all group"
+            >
+              <ShieldCheck className="text-blue-500 mb-2 group-hover:scale-110 transition-transform" size={28} />
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Generate Audit</span>
+            </button>
+            {/* CSV EXPORT BUTTON */}
+            <button
+              onClick={handleExportCSV}
+              className="flex flex-col items-center justify-center p-6 bg-amber-600/5 hover:bg-amber-600/10 border border-amber-500/10 rounded-[2rem] transition-all group"
+            >
+              <CloudDownload className="text-amber-500 mb-2 group-hover:scale-110 transition-transform" size={28} />
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">ExportCSV</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* SESSION MANAGEMENT */}
+      <div className="bg-rose-500/5 border border-rose-500/10 rounded-[2.5rem] p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
+        <div className="text-center md:text-left">
+          <h4 className="font-bold text-rose-500 text-lg mb-1">Session Management</h4>
+          <p className="text-xs text-slate-500 leading-relaxed font-medium">Sign out to clear your local session and protect your cloud data.</p>
+        </div>
+        <button onClick={handleLogout} className="w-full md:w-auto px-10 bg-rose-500 hover:bg-rose-600 text-white font-bold py-4 rounded-2xl shadow-lg shadow-rose-500/20 transition-all flex items-center justify-center gap-2">
+          <LogOut size={18} /> Secure Logout
+        </button>
+      </div>
+    </div>
+  );
+};
+
+export default UserProfile;
