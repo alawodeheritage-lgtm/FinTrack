@@ -81,20 +81,24 @@ const Transactions = ({
   ]);
 
   return (
-    <div className="space-y-6 pb-10 animate-in fade-in">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 px-2">
+    <div className="space-y-6 pb-10 animate-in fade-in px-4 sm:px-0">
+      {/* FILTER CONTROLS WRAPPER: Wrapped grid for compact screen alignments */}
+      <div className="flex flex-col gap-4 px-2">
         <h3 className="text-xl font-bold text-slate-900 dark:text-white">Transaction History</h3>
-        <div className="flex items-center gap-3 w-full sm:w-auto">
+
+        {/* Responsive flex wrapping structure without changing visual elements */}
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           <select
             value={viewMode}
             onChange={(e) => setViewMode(e.target.value)}
-            className="bg-white dark:bg-[#161f2e] border border-slate-200 dark:border-white/5 rounded-xl py-2 px-3 text-xs font-bold text-slate-500 dark:text-slate-400 outline-none shadow-sm cursor-pointer"
+            className="flex-1 sm:flex-initial bg-white dark:bg-[#161f2e] border border-slate-200 dark:border-white/5 rounded-xl py-2 px-3 text-xs font-bold text-slate-500 dark:text-slate-400 outline-none shadow-sm cursor-pointer"
           >
             <option value="month">This Month</option>
             <option value="year">This Year</option>
             <option value="all">All Time</option>
           </select>
-          <div className="relative flex-grow sm:w-48">
+
+          <div className="relative flex-grow min-w-[140px] sm:w-48 order-first sm:order-none w-full sm:w-auto">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
             <input
               placeholder="Search..."
@@ -103,19 +107,21 @@ const Transactions = ({
               className="w-full bg-white dark:bg-[#161f2e] border border-slate-200 dark:border-white/5 rounded-xl py-2 pl-9 pr-4 text-xs text-slate-900 dark:text-white outline-none focus:border-blue-500 shadow-sm"
             />
           </div>
+
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
-            className="bg-white dark:bg-[#161f2e] border border-slate-200 dark:border-white/5 rounded-xl py-2 px-3 text-xs font-bold text-slate-500 dark:text-slate-400 outline-none shadow-sm cursor-pointer"
+            className="flex-1 sm:flex-initial bg-white dark:bg-[#161f2e] border border-slate-200 dark:border-white/5 rounded-xl py-2 px-3 text-xs font-bold text-slate-500 dark:text-slate-400 outline-none shadow-sm cursor-pointer"
           >
             <option value="date">Date</option>
             <option value="amount">Amount</option>
             <option value="category">Category</option>
           </select>
+
           <select
             value={filterCat}
             onChange={(e) => setFilterCat(e.target.value)}
-            className="bg-white dark:bg-[#161f2e] border border-slate-200 dark:border-white/5 rounded-xl py-2 px-3 text-xs font-bold text-slate-500 dark:text-slate-400 outline-none shadow-sm cursor-pointer"
+            className="flex-1 sm:flex-initial bg-white dark:bg-[#161f2e] border border-slate-200 dark:border-white/5 rounded-xl py-2 px-3 text-xs font-bold text-slate-500 dark:text-slate-400 outline-none shadow-sm cursor-pointer"
           >
             <option value="All">All Categories</option>
             <option value="Essential">Essential</option>
@@ -124,24 +130,28 @@ const Transactions = ({
           </select>
         </div>
       </div>
+
+      {/* TRANSACTION ITEMS */}
       <div className="space-y-3">
         {filteredTransactions.map((item) => (
-          <div key={item.$id} className="group flex items-center justify-between bg-white dark:bg-[#161f2e] border border-slate-200 dark:border-white/5 p-5 rounded-2xl hover:border-blue-500/30 transition-all shadow-sm">
-            <div className="flex items-center gap-4">
-              <div className="bg-slate-50 dark:bg-[#0b121f] p-3 rounded-xl text-blue-500">
-                {item.category === 'Essential' ? <Bus /> : item.category === 'Luxury' ? <Utensils /> : <TrendingUp />}
+          <div key={item.$id} className="group flex items-center justify-between bg-white dark:bg-[#161f2e] border border-slate-200 dark:border-white/5 p-4 sm:p-5 rounded-2xl hover:border-blue-500/30 transition-all shadow-sm gap-2">
+            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+              <div className="bg-slate-50 dark:bg-[#0b121f] p-2.5 sm:p-3 rounded-xl text-blue-500 flex-shrink-0">
+                {item.category === 'Essential' ? <Bus size={18} /> : item.category === 'Luxury' ? <Utensils size={18} /> : <TrendingUp size={18} />}
               </div>
-              <div>
-                <h4 className="font-bold text-slate-900 dark:text-white text-sm lg:text-base">{item.title}</h4>
-                <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">{item.category} • {new Date(item.createdAt).toLocaleDateString()}</p>
+              <div className="min-w-0">
+                <h4 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm lg:text-base truncate">{item.title}</h4>
+                <p className="text-[9px] sm:text-[10px] text-slate-400 font-bold uppercase mt-0.5 whitespace-nowrap">{item.category} • {new Date(item.createdAt).toLocaleDateString()}</p>
               </div>
             </div>
-            <div className="flex items-center gap-4">
-              <span className="text-lg font-bold text-slate-900 dark:text-white">
+            <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
+              <span className="text-sm sm:text-lg font-black text-slate-900 dark:text-white">
                 <AmountMask amount={item.amount} currency={currency} prefix="-" isPrivate={isPrivate} />
               </span>
-              <button onClick={() => handleEdit(item)} className="text-slate-300 hover:text-blue-500 transition-colors"><Edit3 size={18} /></button>
-              <button onClick={() => handleDelete(item.$id)} className="text-slate-300 hover:text-rose-500 transition-colors"><Trash2 size={18} /></button>
+              <div className="flex items-center gap-1 sm:gap-2">
+                <button onClick={() => handleEdit(item)} className="text-slate-400 hover:text-blue-500 transition-colors p-1"><Edit3 size={16} /></button>
+                <button onClick={() => handleDelete(item.$id)} className="text-slate-400 hover:text-rose-500 transition-colors p-1"><Trash2 size={16} /></button>
+              </div>
             </div>
           </div>
         ))}
