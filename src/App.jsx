@@ -11,6 +11,7 @@ import Dashboard from "./Components/Dashboard";
 import ForgotPassword from "./Auth/ForgotPassword";
 import ResetPassword from "./Auth/resetPassword";
 import ProtectedRoute from "./ProtectedRoute";
+import { PeriodProvider } from './context/PeriodContext';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -70,9 +71,11 @@ function App() {
         <Route
           path="/dashboard"
           element={
+            <PeriodProvider>
             <ProtectedRoute user={user}>
               <Dashboard user={user} setUser={setUser} />
             </ProtectedRoute>
+               </PeriodProvider>
           }
         />
 

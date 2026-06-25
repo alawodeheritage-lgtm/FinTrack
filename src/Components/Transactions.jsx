@@ -1,25 +1,99 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { Search, Bus, Utensils, TrendingUp, Edit3, Trash2 } from 'lucide-react';
 import AmountMask from './AmountMask';
+import { filterByMonth, filterByYear } from '../lib/dateUtils';
+
 
 const Transactions = ({
   currency,
-  filteredTransactions,
-  searchQuery,
-  setSearchQuery,
-  sortBy,
-  setSortBy,
-  filterCat,
-  setFilterCat,
+  isPrivate,
+  allExpenses,
+  selectedMonth,
+  selectedYear,
   handleEdit,
   handleDelete,
-  isPrivate
 }) => {
+
+  const [viewMode, setViewMode] = useState('month');
+  const [filterCat, setFilterCat] = useState('All');
+  const [filterType, setFilterType] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState('date');
+
+  const filteredTransactions = useMemo(() => {
+    let base = allExpenses;
+
+    if (viewMode === 'month') {
+      base = filterByMonth(
+        base,
+        selectedMonth,
+        selectedYear
+      );
+    }
+
+    if (viewMode === 'year') {
+      base = filterByYear(
+        base,
+        selectedYear
+      );
+    }
+
+    return base
+      .filter(t =>
+        filterCat === 'All' ||
+        t.category === filterCat
+      )
+      .filter(t =>
+        filterType === 'All' ||
+        (
+          filterType === 'Income'
+            ? t.category === 'Income'
+            : t.category !== 'Income'
+        )
+      )
+      .filter(t =>
+        t.title
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase())
+      )
+      .sort((a, b) => {
+        if (sortBy === 'amount')
+          return b.amount - a.amount;
+
+        if (sortBy === 'category')
+          return a.category.localeCompare(b.category);
+
+        return (
+          new Date(b.createdAt) -
+          new Date(a.createdAt)
+        );
+      });
+
+  }, [
+    allExpenses,
+    viewMode,
+    selectedMonth,
+    selectedYear,
+    filterCat,
+    filterType,
+    searchQuery,
+    sortBy
+  ]);
+
   return (
     <div className="space-y-6 pb-10 animate-in fade-in">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 px-2">
         <h3 className="text-xl font-bold text-slate-900 dark:text-white">Transaction History</h3>
         <div className="flex items-center gap-3 w-full sm:w-auto">
+          <select
+            value={viewMode}
+            onChange={(e) => setViewMode(e.target.value)}
+            className="bg-white dark:bg-[#161f2e] border border-slate-200 dark:border-white/5 rounded-xl py-2 px-3 text-xs font-bold text-slate-500 dark:text-slate-400 outline-none shadow-sm cursor-pointer"
+          >
+            <option value="month">This Month</option>
+            <option value="year">This Year</option>
+            <option value="all">All Time</option>
+          </select>
           <div className="relative flex-grow sm:w-48">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
             <input

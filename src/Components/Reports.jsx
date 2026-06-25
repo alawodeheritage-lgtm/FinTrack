@@ -1,7 +1,8 @@
 import React from 'react';
 import { BarChart3, Zap } from 'lucide-react';
 import AmountMask from './AmountMask';
-
+import { usePeriod } from '../context/PeriodContext';
+import { useYearlyStats } from '../hooks/useYearlyStats';
 const Reports = ({
   currency,
   categoryConfig,
@@ -11,8 +12,24 @@ const Reports = ({
   yearlyProjection,
   fiveYearProjection,
   proInsight,
-  isPrivate
+  isPrivate,
+  allExpenses
 }) => {
+  const { selectedMonth, selectedYear } = usePeriod();
+
+  const yearlyStats = useYearlyStats(
+    allExpenses,
+    selectedYear
+  );
+
+  // console.log(
+  //   "Reports Period:",
+  //   selectedMonth,
+  //   selectedYear
+  // );
+
+  // console.log(yearlyStats);
+  // console.log(yearlyStats.monthlyBreakdown);
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in slide-in-from-bottom-4">
       {/* LEFT: SPENDING BARS & PIE DISTRIBUTION */}

@@ -1,5 +1,23 @@
+// src/components/UserProfile.jsx
 import React, { useState } from 'react';
-import { Plus, Edit3, Trash2, Sparkles, ShieldCheck, CloudDownload, LogOut, TrendingUp, WalletIcon } from 'lucide-react';
+import {
+  Plus,
+  Edit3,
+  Trash2,
+  Sparkles,
+  ShieldCheck,
+  CloudDownload,
+  LogOut,
+  TrendingUp,
+  WalletIcon,
+  CheckCircle2,
+  Lock
+} from 'lucide-react';
+
+// 🛠️ 1. IMPORT DATE UTILITIES & SERVICE LAYER ACTIONS
+import { isPastPeriod, MONTH_NAMES } from '../lib/dateUtils';
+import { closeMonth } from '../lib/monthService';
+import Swal from 'sweetalert2';
 
 const UserProfile = ({
   user,
@@ -8,15 +26,115 @@ const UserProfile = ({
   totalSpent,
   efficiency,
   incomeItems,
+  expenses,
   handleEdit,
+  monthlySavings,
   handleDelete,
   handleExportFinancialAudit,
   handleExportCSV,
   handleLogout,
-  setActiveTab
+  setActiveTab,
+
+  // 🛠️ 2. ADD NEW CONDITIONAL PROPS PASSED FROM THE PARENT HOOK CONTROLLER
+  selectedMonth,
+  selectedYear,
+  existingReports = [],
+  onRefreshReports
 }) => {
+
   const [isAlertsEnabled, setIsAlertsEnabled] = useState(true);
   const [is2FAEnabled, setIs2FAEnabled] = useState(false);
+  const [isClosing, setIsClosing] = useState(false); // Local processing spinner flag
+
+  // 🛠️ 3. COMPUTE LEDGER STATE CONDITIONS BASED ON PASSED BOUNDARIES
+  const isPast = isPastPeriod(selectedMonth, selectedYear);
+  // const isPast = true; // 🧪 Force the button to open for testing!
+  const isAlreadyClosed = existingReports.some(
+    r => Number(r.month) === Number(selectedMonth) && Number(r.year) === Number(selectedYear) && r.isClosed
+  );
+
+  // 🛠️ 4. CORE EXECUTION HANDLER
+  const handleCloseMonthAction = async () => {
+    // 1. SweetAlert Confirmation Modal
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: `This locks all transaction logs for ${MONTH_NAMES[selectedMonth - 1]} ${selectedYear} permanently into your secure archive storage.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#2563eb', // Matches your blue-600 Tailwind color
+      cancelButtonColor: '#64748b',  // Slate color
+      confirmButtonText: 'Yes, seal ledger!',
+      cancelButtonText: 'Cancel',
+      background: document.documentElement.classList.contains('dark') ? '#161f2e' : '#ffffff',
+      color: document.documentElement.classList.contains('dark') ? '#ffffff' : '#0f172a'
+    });
+
+    if (!result.isConfirmed) return;
+
+    setIsClosing(true);
+
+    // 2. Loading Notification while writing to Appwrite
+    Swal.fire({
+      title: 'Sealing Ledger...',
+      text: 'Please wait while we secure your historical data.',
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      },
+      background: document.documentElement.classList.contains('dark') ? '#161f2e' : '#ffffff',
+      color: document.documentElement.classList.contains('dark') ? '#ffffff' : '#0f172a'
+    });
+
+    try {
+      await closeMonth({
+        userId: user.$id || user.id,
+        month: Number(selectedMonth),
+        year: Number(selectedYear),
+        stats: {
+          income: totalIncome,
+          totalSpent: totalSpent,
+          savings: monthlySavings,
+          efficiency: efficiency,
+          balance: totalIncome - totalSpent
+        },
+        existingReports
+      });
+
+      // 3. Success SweetAlert
+      await Swal.fire({
+        title: 'Ledger Sealed!',
+        text: 'Historical snapshot added to data logs securely.',
+        icon: 'success',
+        confirmButtonColor: '#2563eb',
+        background: document.documentElement.classList.contains('dark') ? '#161f2e' : '#ffffff',
+        color: document.documentElement.classList.contains('dark') ? '#ffffff' : '#0f172a'
+      });
+
+      if (onRefreshReports) onRefreshReports();
+    } catch (error) {
+      // 4. Error SweetAlert
+      Swal.fire({
+        title: 'Ledger Lockout Error',
+        text: error.message,
+        icon: 'error',
+        confirmButtonColor: '#ef4444',
+        background: document.documentElement.classList.contains('dark') ? '#161f2e' : '#ffffff',
+        color: document.documentElement.classList.contains('dark') ? '#ffffff' : '#0f172a'
+      });
+    } finally {
+      setIsClosing(false);
+    }
+  };
+  // console.log("Existing Reports:", existingReports);
+  // console.log("Selected:", selectedMonth, selectedYear);
+  const filteredIncome = incomeItems.filter(item => {
+    const date = new Date(item.createdAt);
+
+    return (
+      date.getMonth() + 1 === Number(selectedMonth) &&
+      date.getFullYear() === Number(selectedYear)
+    );
+  });
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 pb-10">
@@ -25,7 +143,7 @@ const UserProfile = ({
         <div className="flex flex-col md:flex-row items-center gap-8">
           <div className="relative group">
             <div className="w-32 h-32 rounded-[2.5rem] bg-blue-600 flex items-center justify-center text-white text-4xl font-black shadow-xl shadow-blue-600/20">
-              {user.name.charAt(0)}
+              {user.name?.charAt(0) || "U"}
             </div>
             <div className="absolute -bottom-2 -right-2 bg-emerald-500 border-4 border-white dark:border-[#161f2e] w-8 h-8 rounded-full shadow-sm"></div>
           </div>
@@ -67,7 +185,7 @@ const UserProfile = ({
           <button onClick={() => setActiveTab('Dashboard')} className="p-2 rounded-xl bg-slate-50 dark:bg-[#0b121f] text-blue-600 hover:bg-blue-600 hover:text-white transition-all"><Plus size={20} /></button>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {incomeItems.map(source => (
+          {filteredIncome.map(source => (
             <div key={source.$id} className="group flex justify-between items-center p-5 bg-slate-50 dark:bg-[#0b121f] rounded-[1.5rem] border border-slate-200 dark:border-white/5 hover:border-blue-500/30 transition-all">
               <div className="flex items-center gap-4">
                 <div className="bg-emerald-500/10 p-2.5 rounded-xl text-emerald-600"><TrendingUp size={18} /></div>
@@ -116,7 +234,6 @@ const UserProfile = ({
             <WalletIcon size={18} className="text-blue-500" /> Vault & Data
           </h4>
           <div className="grid grid-cols-2 gap-4">
-            {/* AUDIT BUTTON */}
             <button
               onClick={handleExportFinancialAudit}
               className="flex flex-col items-center justify-center p-6 bg-blue-600/5 hover:bg-blue-600/10 border border-blue-500/10 rounded-[2rem] transition-all group"
@@ -124,14 +241,46 @@ const UserProfile = ({
               <ShieldCheck className="text-blue-500 mb-2 group-hover:scale-110 transition-transform" size={28} />
               <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Generate Audit</span>
             </button>
-            {/* CSV EXPORT BUTTON */}
             <button
               onClick={handleExportCSV}
               className="flex flex-col items-center justify-center p-6 bg-amber-600/5 hover:bg-amber-600/10 border border-amber-500/10 rounded-[2rem] transition-all group"
             >
               <CloudDownload className="text-amber-500 mb-2 group-hover:scale-110 transition-transform" size={28} />
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">ExportCSV</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Export CSV</span>
             </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 🛠️ 5. INTEGRATED MONTHLY CLOSE WORKFLOW CARD DESIGN */}
+      <div className="bg-white dark:bg-[#161f2e] border border-slate-200 dark:border-white/5 rounded-[2.5rem] p-8 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div>
+            <h4 className="font-bold text-slate-900 dark:text-white text-lg">Accounting Period Integrity</h4>
+            <p className="text-xs text-slate-500 font-medium mt-1">
+              Verify accuracy variables and commit permanent snapshots to immutable cloud history.
+            </p>
+          </div>
+
+          <div className="w-full md:w-auto">
+            {isAlreadyClosed ? (
+              <div className="flex items-center gap-2.5 px-5 py-3.5 bg-emerald-500/5 border border-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-2xl text-xs font-bold uppercase tracking-wider">
+                <CheckCircle2 size={16} /> Period Closed & Sealed
+              </div>
+            ) : isPast ? (
+              <button
+                onClick={handleCloseMonthAction}
+                disabled={isClosing}
+                className="w-full inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-3.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 shadow-lg shadow-blue-600/10"
+              >
+                <Lock size={14} />
+                {isClosing ? 'Processing Security Lock...' : `Close ${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}`}
+              </button>
+            ) : (
+              <div className="flex items-center justify-center gap-2 px-5 py-3.5 bg-slate-50 dark:bg-[#0b121f] border border-slate-200 dark:border-white/5 text-slate-400 dark:text-slate-500 rounded-2xl text-xs font-bold uppercase tracking-wider italic">
+                Active Cycle In Progress
+              </div>
+            )}
           </div>
         </div>
       </div>

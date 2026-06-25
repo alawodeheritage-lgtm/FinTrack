@@ -4,9 +4,14 @@ import { account, databases, ID, Query } from '../lib/appwrite';
 import Swal from 'sweetalert2';
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { usePeriod } from '../context/PeriodContext';
+import MonthSelector from './MonthSelector';
+import { useMonthlyStats } from '../hooks/useMonthlyStats';
+import { useYearlyStats } from '../hooks/useYearlyStats';
+import ArchivePage from './Archive';
 import {
   LayoutDashboard, ReceiptText, Wallet as WalletIcon,
-  BarChart3, User, Menu, X,
+  BarChart3, User, Archive, Menu, X,
   LogOut, Loader2
 } from 'lucide-react';
 
@@ -50,6 +55,7 @@ const Dashboard = ({ user, setUser }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCat, setFilterCat] = useState("All");
   const [sortBy, setSortBy] = useState("date");
+  const [reports, setReports] = useState([]);
 
   const [isDarkMode, setIsDarkMode] = useState(document.documentElement.classList.contains('dark'));
 
@@ -98,11 +104,12 @@ const Dashboard = ({ user, setUser }) => {
   useEffect(() => {
     if (!user) return;
 
-    const loadExpenses = async () => {
+    const loadData = async () => {
       await fetchData();
+      await fetchReports();
     };
 
-    loadExpenses();
+    loadData();
   }, [user, fetchData]);
 
   const resetForm = () => {
@@ -110,6 +117,29 @@ const Dashboard = ({ user, setUser }) => {
     setAmount("");
     setCategory("Essential");
     setEditingId(null);
+  };
+
+
+  const REPORTS_COLLECTION_ID =
+    import.meta.env.VITE_APPWRITE_MONTHLY_REPORTS_COLLECTION_ID;
+
+  const fetchReports = async () => {
+    try {
+      const response = await databases.listDocuments(
+        DATABASE_ID,
+        REPORTS_COLLECTION_ID,
+        [
+          Query.equal("userId", user.$id),
+          Query.limit(1000)
+        ]
+      );
+
+      setReports(response.documents);
+
+      console.log("Reports:", response.documents);
+    } catch (error) {
+      console.error("Failed to load reports:", error);
+    }
   };
 
   const handleAddEntry = async (e) => {
@@ -153,6 +183,22 @@ const Dashboard = ({ user, setUser }) => {
   // 1. DELETE FUNCTION
   // Line 171 (Approx)
   const handleDelete = async (id) => {
+    const isClosedPeriod = reports.some(
+      r =>
+        r.month === transactionMonth &&
+        r.year === transactionYear &&
+        r.isClosed
+    );
+
+    if (isClosedPeriod) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Period Locked',
+        text: 'This accounting period has been sealed.'
+      });
+
+      return;
+    }
     const result = await Swal.fire({
       title: 'Delete?',
       text: "This action cannot be undone.",
@@ -193,7 +239,24 @@ const Dashboard = ({ user, setUser }) => {
     }
   };
 
+
   const handleEdit = (item) => {
+    const isClosedPeriod = reports.some(
+      r =>
+        r.month === transactionMonth &&
+        r.year === transactionYear &&
+        r.isClosed
+    );
+
+    if (isClosedPeriod) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Period Locked',
+        text: 'This accounting period has been sealed.'
+      });
+
+      return;
+    }
     setName(item.title || "");
     setAmount(item.amount?.toString() || "");
     setCategory(item.category || "Essential");
@@ -337,11 +400,14 @@ const Dashboard = ({ user, setUser }) => {
   };
 
   // --- CALCULATIONS ---
-  const incomeItems = useMemo(() => expenses.filter(e => e.category === 'Income'), [expenses]);
+  const incomeItems = expenses.filter(
+    e => e.category === 'Income'
+  );
 
-  const totalIncome = useMemo(() =>
-    incomeItems.reduce((acc, curr) => acc + curr.amount, 0),
-    [incomeItems]);
+  const totalIncome = incomeItems.reduce(
+    (acc, curr) => acc + curr.amount,
+    0
+  );
 
   const totals = useMemo(() => {
     // Filter all entries by category
@@ -372,12 +438,12 @@ const Dashboard = ({ user, setUser }) => {
     luxury: totalForPie > 0 ? (totals.Luxury / totalForPie) * 100 : 33,
     savings: totalForPie > 0 ? (Math.max(0, totals.Savings) / totalForPie) * 100 : 34,
   };
-  const safetyNet = useMemo(() => {
-    if (totals.Essential === 0) return 0;
-    // Math: Total Saved / Monthly Needs
-    const months = totals.Savings / totals.Essential;
-    return months.toFixed(1); // Returns 1.5, 2.0, etc.
-  }, [totals.Savings, totals.Essential]);
+  // const safetyNet = useMemo(() => {
+  //   if (totals.Essential === 0) return 0;
+  //   // Math: Total Saved / Monthly Needs
+  //   const months = totals.Savings / totals.Essential;
+  //   return months.toFixed(1); // Returns 1.5, 2.0, etc.
+  // }, [totals.Savings, totals.Essential]);
 
   const totalSpent = useMemo(() => totals.Essential + totals.Luxury, [totals]);
   const remainingBalance = useMemo(() => {
@@ -416,7 +482,62 @@ const Dashboard = ({ user, setUser }) => {
     return "Your financial health is currently stable.";
   }, [totalIncome, totals.Luxury, totals.Essential, totals.Savings, efficiency]);
 
+  //   const {
+  //   selectedMonth,
+  //   selectedYear
+  // } = usePeriod();
+  // console.log(selectedMonth, selectedYear);
+  // console.log("MonthSelector:", selectedMonth, selectedYear);
 
+  // const stats = useMonthlyStats(
+  //   expenses,
+  //   selectedMonth,
+  //   selectedYear
+  // );
+
+  // console.log(stats.transactions);
+
+  const { selectedMonth, selectedYear } = usePeriod();
+
+  const stats = useMonthlyStats(
+    expenses,
+    selectedMonth,
+    selectedYear
+  );
+  // console.log("Old Income:", totalIncome);
+  // console.log("New Income:", stats.income);
+
+  // console.log("Old Spent:", totalSpent);
+  // console.log("New Spent:", stats.totalSpent);
+
+  // console.log("Old Balance:", remainingBalance);
+  // console.log("New Balance:", stats.balance);
+
+  // console.log("Old Efficiency:", efficiency);
+  // console.log("New Efficiency:", stats.retentionScore);
+  // console.log("Selected Month:", selectedMonth);
+  // console.log("Selected Year:", selectedYear);
+
+  // console.log(
+  //   "Monthly Transactions:",
+  //   stats.transactions.length
+  // );
+  // console.log(
+  //   expenses.length
+  // );
+
+  const yearlyStats = useYearlyStats(
+    expenses,
+    selectedYear
+  );
+
+  const safetyNet = useMemo(() => {
+    if (stats.essential === 0) return 0;
+
+    return (
+      stats.netSavings / stats.essential
+    ).toFixed(1);
+  }, [stats]);
   const filteredTransactions = useMemo(() => {
     let result = expenses.filter(item =>
       item.category !== 'Income' &&
@@ -438,6 +559,9 @@ const Dashboard = ({ user, setUser }) => {
     { name: 'Reports', icon: <BarChart3 size={20} /> },
     { name: 'Transactions', icon: <ReceiptText size={20} /> },
     { name: 'Profile', icon: <User size={20} /> },
+    {
+      name: 'Archive', icon: <Archive size={20} />
+    }
   ];
 
   if (isLoading) return <div className="min-h-screen bg-slate-50 dark:bg-[#0b121f] flex items-center justify-center"><Loader2 className="animate-spin text-blue-500" size={40} /></div>;
@@ -468,7 +592,12 @@ const Dashboard = ({ user, setUser }) => {
         <header className="h-20 border-b border-slate-200 dark:border-white/5 flex items-center justify-between px-6 lg:px-8 bg-white/80 dark:bg-[#0b121f]/80 backdrop-blur-md sticky top-0 z-40">
           <div className="flex items-center gap-4">
             <button className="lg:hidden text-slate-500" onClick={() => setIsMobileMenuOpen(true)}><Menu /></button>
-            <h2 className="text-xl font-bold text-slate-900 dark:text-white">{activeTab}</h2>
+            {/* <h2 className="text-xl font-bold text-slate-900 dark:text-white">{activeTab}</h2> */}
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+              {activeTab}
+            </h2>
+
+            <MonthSelector />
           </div>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-all" onClick={() => setActiveTab('Profile')}>
@@ -488,10 +617,15 @@ const Dashboard = ({ user, setUser }) => {
             <DashboardTab
               currency={currency}
               categoryConfig={categoryConfig}
-              totalIncome={totalIncome}
-              remainingBalance={remainingBalance}
-              totals={totals}
-              proInsight={proInsight}
+              totalIncome={stats.income}
+              remainingBalance={stats.balance}
+              totals={{
+                Essential: stats.essential,
+                Luxury: stats.luxury,
+                Savings: stats.netSavings
+              }}
+              yearlyIncome={yearlyStats.income}
+              selectedYear={selectedYear}
               name={name}
               setName={setName}
               amount={amount}
@@ -501,7 +635,7 @@ const Dashboard = ({ user, setUser }) => {
               editingId={editingId}
               resetForm={resetForm}
               handleAddEntry={handleAddEntry}
-              efficiency={efficiency}
+              efficiency={stats.retentionScore}
               safetyNet={safetyNet}
               isPrivate={isPrivate}
               setIsPrivate={setIsPrivate}
@@ -512,29 +646,30 @@ const Dashboard = ({ user, setUser }) => {
             <Reports
               currency={currency}
               categoryConfig={categoryConfig}
-              totals={totals}
+              totals={{
+                Essential: stats.essential,
+                Luxury: stats.luxury,
+                Savings: stats.netSavings
+              }}
               allocationData={allocationData}
-              efficiency={efficiency}
+              efficiency={stats.retentionScore}
               yearlyProjection={yearlyProjection}
               fiveYearProjection={fiveYearProjection}
               proInsight={proInsight}
               isPrivate={isPrivate}
+              allExpenses={expenses}
             />
           )}
 
           {activeTab === 'Transactions' && (
             <Transactions
               currency={currency}
-              filteredTransactions={filteredTransactions}
-              searchQuery={searchQuery}
-              setSearchQuery={setSearchQuery}
-              sortBy={sortBy}
-              setSortBy={setSortBy}
-              filterCat={filterCat}
-              setFilterCat={setFilterCat}
+              isPrivate={isPrivate}
+              allExpenses={expenses}
+              selectedMonth={selectedMonth}
+              selectedYear={selectedYear}
               handleEdit={handleEdit}
               handleDelete={handleDelete}
-              isPrivate={isPrivate}
             />
           )}
 
@@ -542,9 +677,9 @@ const Dashboard = ({ user, setUser }) => {
             <UserProfile
               user={user}
               currency={currency}
-              totalIncome={totalIncome}
-              totalSpent={totalSpent}
-              efficiency={efficiency}
+              totalIncome={stats.income}
+              totalSpent={stats.totalSpent}
+              efficiency={stats.retentionScore}
               incomeItems={incomeItems}
               handleEdit={handleEdit}
               handleDelete={handleDelete}
@@ -552,7 +687,18 @@ const Dashboard = ({ user, setUser }) => {
               handleExportCSV={handleExportCSV}
               handleLogout={handleLogout}
               setActiveTab={setActiveTab}
+              selectedMonth={selectedMonth}
+              selectedYear={selectedYear}
+              existingReports={reports}
+              onRefreshReports={fetchReports}
+              monthlySavings={stats.netSavings}   // <-- ADD THIS
               isPrivate={isPrivate}
+            />
+          )}
+          {activeTab === 'Archive' && (
+            <ArchivePage
+              reports={reports}
+              currency={currency}
             />
           )}
         </section>
