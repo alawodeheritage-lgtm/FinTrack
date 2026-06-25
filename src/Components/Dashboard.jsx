@@ -96,7 +96,7 @@ const Dashboard = ({ user, setUser }) => {
       setExpenses(normalizeDocuments(response.documents));
       setIsLoading(false);
     } catch (error) {
-      console.error("Cloud Fetch Error:", error);
+      // console.error("Cloud Fetch Error:", error);
       setIsLoading(false);
     }
   }, [DATABASE_ID, COLLECTION_ID, user]);
@@ -136,9 +136,9 @@ const Dashboard = ({ user, setUser }) => {
 
       setReports(response.documents);
 
-      console.log("Reports:", response.documents);
+      // console.log("Reports:", response.documents);
     } catch (error) {
-      console.error("Failed to load reports:", error);
+      // console.error("Failed to load reports:", error);
     }
   };
 
@@ -589,23 +589,29 @@ const Dashboard = ({ user, setUser }) => {
       </aside>
 
       <main className="flex-grow flex flex-col w-full">
-        <header className="h-20 border-b border-slate-200 dark:border-white/5 flex items-center justify-between px-6 lg:px-8 bg-white/80 dark:bg-[#0b121f]/80 backdrop-blur-md sticky top-0 z-40">
-          <div className="flex items-center gap-4">
-            <button className="lg:hidden text-slate-500" onClick={() => setIsMobileMenuOpen(true)}><Menu /></button>
-            {/* <h2 className="text-xl font-bold text-slate-900 dark:text-white">{activeTab}</h2> */}
-            <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+        <header className="h-20 border-b border-slate-200 dark:border-white/5 flex items-center justify-between px-4 sm:px-6 lg:px-8 bg-white/80 dark:bg-[#0b121f]/80 backdrop-blur-md sticky top-0 z-40">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+            <button className="lg:hidden text-slate-500 p-1 mr-1" onClick={() => setIsMobileMenuOpen(true)}>
+              <Menu size={20} />
+            </button>
+
+            {/* Scaled downward from text-xl to text-lg on small mobile screens to prevent layout crowding */}
+            <h2 className="text-lg sm:text-xl font-black tracking-tight text-slate-900 dark:text-white truncate">
               {activeTab}
             </h2>
 
-            <MonthSelector />
+            <div className="flex-shrink-0 scale-95 sm:scale-100 origin-left">
+              <MonthSelector />
+            </div>
           </div>
-          <div className="flex items-center gap-4">
+
+          <div className="flex items-center gap-4 flex-shrink-0">
             <div className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-all" onClick={() => setActiveTab('Profile')}>
               <div className="text-right hidden sm:block">
                 <p className="text-sm font-bold text-slate-900 dark:text-white leading-none">{user.name}</p>
-                <p className="text-[10px] text-blue-500 font-medium mt-1 uppercase tracking-tighter">Pro Plan</p>
+                <p className="text-[10px] text-blue-500 font-bold mt-1 uppercase tracking-widest">Pro Plan</p>
               </div>
-              <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold border border-white/10 shadow-sm">
+              <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black border border-white/10 shadow-sm flex-shrink-0">
                 {user.name.charAt(0)}
               </div>
             </div>
