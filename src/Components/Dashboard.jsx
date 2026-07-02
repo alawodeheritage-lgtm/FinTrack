@@ -183,22 +183,34 @@ const Dashboard = ({ user, setUser }) => {
   // 1. DELETE FUNCTION
   // Line 171 (Approx)
   const handleDelete = async (id) => {
-    const isClosedPeriod = reports.some(
-      r =>
-        r.month === transactionMonth &&
-        r.year === transactionYear &&
-        r.isClosed
-    );
+    // 1. Find the specific transaction to get its actual creation date
+    const transactionToDelete = expenses.find(e => e.$id === id);
 
-    if (isClosedPeriod) {
-      Swal.fire({
-        icon: 'error',
-        title: 'Period Locked',
-        text: 'This accounting period has been sealed.'
-      });
+    if (transactionToDelete) {
+      const tDate = new Date(transactionToDelete.createdAt);
+      const tMonth = tDate.toLocaleString('default', { month: 'long' }); // e.g., "January"
+      const tYear = tDate.getFullYear();
 
-      return;
+      // 2. Check if THAT specific transaction's period is locked
+      const isClosedPeriod = reports.some(
+        r =>
+          r.month === tMonth &&
+          r.year === tYear &&
+          r.isClosed
+      );
+
+      if (isClosedPeriod) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Period Locked',
+          text: 'This accounting period has been sealed.',
+          background: isDarkMode ? '#161f2e' : '#fff',
+          color: isDarkMode ? '#fff' : '#000'
+        });
+        return;
+      }
     }
+
     const result = await Swal.fire({
       title: 'Delete?',
       text: "This action cannot be undone.",
@@ -213,7 +225,6 @@ const Dashboard = ({ user, setUser }) => {
 
     if (result.isConfirmed) {
       try {
-        // Line 181 - The "await" is now safely inside an "async" function
         await databases.deleteDocument(DATABASE_ID, COLLECTION_ID, id);
         fetchData();
         if (editingId === id) resetForm();
@@ -241,10 +252,16 @@ const Dashboard = ({ user, setUser }) => {
 
 
   const handleEdit = (item) => {
+    // 1. Get the month and year directly from the item being edited
+    const tDate = new Date(item.createdAt);
+    const tMonth = tDate.toLocaleString('default', { month: 'long' });
+    const tYear = tDate.getFullYear();
+
+    // 2. Verify against locked database periods
     const isClosedPeriod = reports.some(
       r =>
-        r.month === transactionMonth &&
-        r.year === transactionYear &&
+        r.month === tMonth &&
+        r.year === tYear &&
         r.isClosed
     );
 
@@ -252,11 +269,14 @@ const Dashboard = ({ user, setUser }) => {
       Swal.fire({
         icon: 'error',
         title: 'Period Locked',
-        text: 'This accounting period has been sealed.'
+        text: 'This accounting period has been sealed.',
+        background: isDarkMode ? '#161f2e' : '#fff',
+        color: isDarkMode ? '#fff' : '#000'
       });
-
       return;
     }
+
+    // 3. Populate form states safely
     setName(item.title || "");
     setAmount(item.amount?.toString() || "");
     setCategory(item.category || "Essential");
